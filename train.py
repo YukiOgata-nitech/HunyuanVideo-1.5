@@ -532,19 +532,15 @@ class HunyuanVideoTrainer:
         if self.is_main_process:
             logger.info("Applying gradient checkpointing to transformer blocks...")
         
-        no_split_module_type = None
-        for block in self.transformer.double_blocks:
-            if block is not None:
-                no_split_module_type = type(block)
-                break
+        no_split_module_types = tuple(
+            {
+                type(b)
+                for b in list(self.transformer.double_blocks) + list(self.transformer.single_blocks)
+                if b is not None
+            }
+        )
         
-        if no_split_module_type is None:
-            for block in self.transformer.single_blocks:
-                if block is not None:
-                    no_split_module_type = type(block)
-                    break
-        
-        if no_split_module_type is None:
+        if len(no_split_module_types) == 0:
             logger.warning("Could not find block type for gradient checkpointing. Using fallback.")
             if hasattr(self.transformer, "gradient_checkpointing_enable"):
                 self.transformer.gradient_checkpointing_enable()
@@ -557,7 +553,7 @@ class HunyuanVideoTrainer:
             )
         
         def selective_checkpointing(submodule):
-            return isinstance(submodule, no_split_module_type)
+            return isinstance(submodule, no_split_module_types)
         
         apply_activation_checkpointing(
             self.transformer,
